@@ -1,0 +1,340 @@
+---
+title: "PEC 1"
+author: "Petrissans Moll, Sofia"
+date: "2024-10-28"
+output:
+  pdf_document:
+    toc: yes
+    latex_engine: xelatex
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\newpage
+
+# Resumen ejecutivo 
+
+El siguiente informe detalla el análisis de un dataset de metabolitos en pacientes que presentan caquexia y pacientes controles. 
+
+El proceso ha consitido en la elección de un dataset, la descarga de los datos y la creación de un contendeor de tipo `SummarizedExperiment`. Para la exploración y análisis del dataset se ha hecho uso de R y bibliotecas específicas para manipular y visualizar los datos. El análisis para obtener una visión general de los datos, ha consitido en la descripción de los datos y metadatos de nuestro objeto, seguido de una descripción de grupos. Un análisis de PCA para explorar la variabilidad de los datos junto a su visualización y por último, gráficos boxplot para observar la diferencia de los metabolitos medidos entre los dos grupos.
+
+El uso de este dataset permite realizar un repaso y ampliación de los objetivos de esta primera parte de la asignatura, por lo que, los resultados obtenidos durante el análisis de los datos no pretender estudiar con detalle cada metabolito del dataset, sino aplicar las técnicas de análisis ómicos adquiridos hasta ahora.
+
+
+\newpage
+
+# Objetivos del estudio
+
+El objetivo de este estudio es demostrar que se han alcanzado los objetivos y competencias planteados a lo largo del primer reto de la asignatura, mediante la realización de un análisis de un conjunto de datos, en este caso, de metabolitos en pacientes cachexicos y controles. Esto implica aplicar habilidades aprendidas en el curso. 
+
+Los objetivos específicos son:
+
+-  Generar un objeto estructurado SummarizedExperiment que facilite el manejo y análisis de los datos.
+
+-  Identificar y cuantificar diferencias en los perfiles de metabolitos entre pacientes cachexicos y controles.
+
+-  Aplicar técnicas de análisis multivariado, como PCA, para explorar patrones subyacentes en los datos, a la vez que permiten visualizaragrupaciones naturales o erróneas
+
+-  Utilizar repositorios como github, que permiten distribuir y administrar código. 
+
+Este enfoque no solo refuerza el aprendizaje de conceptos ya tratados, sino que también fomenta la adquisición de nuevas habilidades necesarias para el análisis de datos en contextos biológicos.
+
+
+\newpage
+
+# Materiales y Métodos
+
+## Origen y naturaleza de los datos.
+
+El dataset analizado Los datos provienen de un paquete de R, `specmine.datasets`, pero debido a la imposibilidad de descargar este paquete al no estar diponible, se han obtenido del repositorio de github https://github.com/nutrimetabolomics/metaboData/.
+
+Los datos descargados (human_cachexia) están disponibles en formato CSV. Los metadotos estaban incluidos en las primeras dos columnas (Patient.ID y Muscle.loss)  del dataset por lo que primero se dividieron los datos que aportaban información cualitativa de los que aportaban información cuantitativa. Se emplearon métodos estadísticos y computacionales para llevar a cabo el análisis, utilizando un enfoque basado en R.
+
+## Herramientas informáticas.
+
+Se utilizó R como lenguaje de programación principal, aprovechando bibliotecas como:
+
+-  SummarizedExperiment
+
+-  ggplot2
+
+-  tidyr
+
+-  S4Vectors
+
+## Procedimiento general de análisis.
+
+-  Análisis descriptivo de los datos. Se extrajeron los datos experimentales del objeto SummariezExperiment
+
+-  Descirpción de grupos. Se identificaro los grupos de pacientes segun el estado de caquexia.
+
+-  Análisis de componentes princiaples (PCA). Los datos fueron preparados y escalados para después aplicar la función `prcomp`y obtener los principales componentes que explican la variabilidad de los datos.
+
+-  Boxplots por grupo para cada metabolito.
+
+\newpage
+
+# Resultados
+
+## Selección de un dataset de metabolómica
+
+El dataset que he elegido proviene del repositorio de github https://github.com/nutrimetabolomics/metaboData/.  
+
+La caquexia es un complejo síndrome que causa périda de masa muscular. Normalmente está asociada a una enfermedad subyacente como puede ser el cáncer. Para el estudio se recogieron un total de 77 muestras de orina de pacientes de los cuales 47 tenian caquexia y 30 pacientes control.
+
+```{r, message=FALSE, warning=FALSE}
+library(SummarizedExperiment)
+
+cachexia <- read.csv("C:/Users/sofia/Desktop/Master UOC/Tercer cuatri/Análisis datos Ómicos/PEC_1/human_cachexia.csv")
+
+head(cachexia[, 1:15])
+```
+
+## Summarized Experiment
+
+**Una vez descargados los datos se procede a la creación de un contenedor del tipo SummarizedExperiment que contenga los datos y los metadatos**
+
+Se puede observar que cada fila representa una muestra, en este caso, un paciente. La primera columna da infromación del identificador de cada paciente, mientras que la segunda columna indica si el paciente presenta o no caquexia, seguido de las otras 63 columnas que represetan la medición de diferentes metabolitos observados en el estudio. 
+
+Como se explica en bioconductor (https://bioconductor.org/packages/release/bioc/vignettes/SummarizedExperiment/inst/doc/SummarizedExperiment.html), `SummarizedExperimentes` es un contenedor de tipo matriz donde las filas representan características de interes (en este caso metabolitos de interes) y las columnas representan muestras. 
+
+Primero, dividiré los metadatos, aquellos datos que nos aportan información de los valores medidos, en este caso, primera y segunda columna `Patient.ID` y `Muscle.loss`. Y los datos numéricos, el resto y me aseguro que sean de tipo numérico. 
+
+Como los pacientes deben quedar representados en las columnas, hay que transponer los valores numéricos, que estaban en las columnas, para que ahora pasen a las filas.
+
+
+```{r}
+library(S4Vectors)
+
+numeric_data <- as.data.frame(lapply(cachexia[, -c(1, 2)], function(x) as.numeric(as.character(x))))
+
+# Transponer numeric_data para que las columnas representen pacientes
+numeric_data_t <- t(numeric_data)
+
+# Crear los metadatos usando las columnas 'Patient.ID' y 'Muscle.loss'
+metadata <- DataFrame(Patient.ID = cachexia$Patient.ID, Muscle.loss = cachexia$Muscle.loss)
+```
+
+Por último, creo el objeto SummarizedExperiment
+
+```{r}
+# Crear el objeto SummarizedExperiment
+se <- SummarizedExperiment(
+    assays = list(counts = as.matrix(numeric_data_t)),
+    colData = metadata
+)
+se
+```
+Podemos ver la dimensión del objeto creado que contiene 63 variables, metabolitos medidos, y 77 pacientes. 
+
+Por último, guardo el objeto:
+
+```{r}
+save(se, file = "se_cachexia.Rda")
+```
+
+
+## Exploración del dataset 
+
+**Llevar a cabo una exploración del dataset que proporcione una visión general del mismo**
+
+### Análisis descriptivo
+
+Para recuperar los datos experimentales de un SummarizedExperimentobjeto, se puede utilizar el assays()descriptor de acceso (https://bioconductor.org/packages/release/bioc/vignettes/SummarizedExperiment/inst/doc/SummarizedExperiment.html).
+
+```{r}
+head(assays(se)$counts[, 1:10])
+```
+
+Para acceder a los metadatos se puede usar la función `colData()`. 
+
+```{r}
+colData(se)
+```
+
+Como hemos establecido, contiene 2 columnas que descriptivas para cada fila de muestra que es la identificación de cada paciente y si presenta o no el síndrome de estudio.
+
+Es interesante acceder al metadato `Muscle.loss` y observar los dos niveles:
+
+```{r}
+se[, se$Muscle.loss == "cachexic"]
+
+se[, se$Muscle.loss == "control"]
+```
+
+Como se indicaba en la descripción de los datos, hay 47 muestras de pacientes con caquexia y 30 muestras control. 
+
+Para seguir con la descripción estadística de los datos, calcularé la media, mediana, desviación estándar y rango de los metabolitos para ver la dispersión gneral de los datos.
+
+
+```{r}
+# Cargar los datos de metabolitos
+metabolite_data <- assays(se)$counts
+
+# Convertir a data frame para facilitar el cálculo de estadísticas
+metabolite_data_df <- as.data.frame(metabolite_data)
+
+# Calcular estadísticas descriptivas
+stats_summary <- data.frame(
+  Metabolite = rownames(metabolite_data_df),
+  Mean = apply(metabolite_data_df, 1, mean, na.rm = TRUE),
+  Median = apply(metabolite_data_df, 1, median, na.rm = TRUE),
+  SD = apply(metabolite_data_df, 1, sd, na.rm = TRUE),
+  Range = apply(metabolite_data_df, 1, function(x) diff(range(x, na.rm = TRUE)))
+)
+
+# Mostrar las primeras filas del resumen estadístico
+print(head(stats_summary))
+
+```
+
+### Análisis de Componentes Principales
+
+Como se ha explicando en la actividad 1.3, una de las mejores estrategias para explorar la variabilidad y patrones en los datos de metabolóica es realizando un PCA. Como se explica en la teoria, las primeras componentes nos permitiran enetender la mayor parte de la variabilidad ya que cada componente explica más que el siguiente.
+
+Para eso, primero hay que preparar los datos, asegurarse que sean valores numéricos y que no haya valores NAs, transponer l matriz y escalar los datos.
+
+
+```{r}
+library(magrittr)
+#Extraer los datos de metabolitos del objeto SummarizedExperiment
+metabolite_data <- assays(se)$counts %>%
+    as.matrix() %>%
+    na.omit()
+
+# Transponer la matriz de modo que las filas sean los pacientes y las columnas los metabolitos
+metabolite_data_t <- t(metabolite_data)
+
+#Escalar los datos
+metabolite_data_scaled <- scale(metabolite_data_t)
+```
+
+Como se explica aquí https://aspteaching.github.io/AMVCasos/#ejemplo-2-an%C3%A1lisis-de-correspondencias-de-datos-de-microarrays, se puede hacer uso de la función `prcomp` para caclular las componentes principales. 
+
+```{r}
+# Calcular la PCA
+pca_result <- prcomp(metabolite_data_scaled, center = TRUE, scale. = TRUE)
+
+# Resumen de las 10 primeras PCs
+pca_summary <- summary(pca_result)
+pca_summary$importance[, 1:10]
+```
+```{r}
+pca_result$rotation[,1]
+```
+
+Con esta útima salida podemos describir la PC1:
+$$Y_i = 0.07678198 \quad \text{x} \quad \text{X1.6.Anhydro.beta.D.glucose}  \quad +  \quad 0.06448034 \quad \text{x} \quad \text{X1.Methylnicotinamide} \quad + \quad 0.11064656 \quad \text{x} \quad \text{X2.Aminobutyrate} \quad + \quad  ... $$              
+
+Para visualizarlo en un gráfico, con `ggplot2` se pueden mostrar los dos primeros componentes principales, que, como se ha dicho anteriormente, suelen capturar la mayor parte de la variabilidad en los datos. 
+
+```{r}
+library(ggplot2)
+
+# Calcular el pocentaje de variabilidad explicada por cada componente
+explained_variance <- pca_result$sdev^2 / sum(pca_result$sdev^2) * 100
+
+
+# Convertir los datos de PCA a un data frame para graficar
+pca_data <- as.data.frame(pca_result$x)
+
+# Agregar la información de cachexia
+pca_data$Group <- colData(se)$Muscle.loss 
+
+# Crear el gráfico
+ggplot(pca_data, aes(x = PC1, y = PC2, color = Group)) +
+    geom_point(size = 2) +
+    labs(title = "PCA de Metabolitos",
+         x = paste0("PC1 (", round(explained_variance[1], 2), "%)"),
+         y = paste0("PC2 (", round(explained_variance[2], 2), "%)")) +
+    theme_minimal()
+```
+
+
+El primer componte explica un 40.43% de las variabilidad. Se puede ver asociada al factor `Muscle.loss`, los pacientes con caquexia en general a la derecha y los control a la izquierda. Mientras que la segunda componte explica muy poca variabilidad, solo un 8.18%.
+
+### Boxplot de metabolitos por grupo
+
+Otra manera interesante de explorar los datos en este tipo de experimentos donde hay dos grupos (caquexia y control) es realizr un boxplot por grupo para cada metabolito. De esta manera se puede ver como varia cada metabólito entre los grupos y por lo tanto ver que metabolitos sufren una modificación en sus valores cuando se este síndrome esta presente. 
+
+Si estuvieramos buscando un metabolito concreto nos centrariamos en ese, pero para poner un ejemplo, he representados los primeros 5 metabolitos que aparecen en la tabla.
+
+```{r}
+library(tidyr)
+
+# Convertir los datos de metabolitos a formato largo
+metabolite_data_long <- as.data.frame(metabolite_data_t)
+metabolite_data_long$Group <- colData(se)$Muscle.loss  # Añadir grupo
+metabolite_data_long <- pivot_longer(metabolite_data_long, cols = -Group, names_to = "Metabolite", values_to = "Value")
+
+# Seleccionar los 5 primeros metabolitos
+top5_metabolites <- head(unique(metabolite_data_long$Metabolite), 5)
+metabolite_data_long <- metabolite_data_long[metabolite_data_long$Metabolite %in% top5_metabolites, ]
+
+# Graficar boxplots
+library(ggplot2)
+ggplot(metabolite_data_long, aes(x = Group, y = Value, fill = Group)) +
+  geom_boxplot(outlier.size = 0.5, alpha = 0.7) +
+  facet_wrap(~ Metabolite, scales = "free_y") +
+  labs(title = "Boxplots de los primero 5 Metabolitos por Grupo") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+Observando este gráfico, interprtaríamos los resultados y los compararíamos con la bibliografía consultada. A simple vista, parece que hay un aumento en los valores de estos metabolitos en las muestras de los pacientes que presentan caquexia en comparación con los pacientes control, aunque desconocemos si esta diferencia es estadísticamente signficativa. 
+
+
+# Discusión y limitaciones
+
+Los resultados preliminarares obtenidos muestra que hay una variación en los perfiles de metabolitos entre los pacientes cachexicos y los controles, lo que sugiere que algunos metabolitos pueden actuar como biomarcadores potenciales. Sin embargo, este estudio tiene limitaciones, incluyendo el tamaño de la muestra y la posibilidad de variabilidad en las mediciones de metabolitos. Además, no se considera el efecto de factores confusos como la edad, el sexo o el tratamiento en curso de los pacientes.
+
+Las conclusiones sugieren que el análisis de metabolitos puede proporcionar información valiosa para entender la fisiología de la cachexia, sin embargo, se recomienda que futuros estudios incluyan una mayor diversidad de pacientes y un enfoque longitudinal.
+
+
+# Repositorio github.
+
+https://github.com/SofiaPetrissans/Petrissans-Moll-Sofia-PEC1
+
+Contiene: 
+
+-  el informe (Petrissans_Moll_Sofia_Informe.pdf)
+
+-  el objeto contenedor con los datos y los metadatos en formato binario (se_cachexia.Rda)
+
+-  el código R para la exploración de los datos (PEC1.Rmd)
+
+-  los datos en formato csv (human_cachezia.csv)
+
+-  los metadatos acerca del dataset en un archivo markdown (metadatos.Rmd)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
